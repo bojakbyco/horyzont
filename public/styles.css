@@ -140,13 +140,17 @@ body {
 }
 
 .icon-btn svg {
-  width: 19px;
-  height: 19px;
+  width: 20px;
+  height: 20px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.5;
+  stroke-width: 1.55;
   stroke-linecap: round;
+  stroke-linejoin: round;
 }
+
+/* zębatka ma więcej detali niż reszta ikon — potrzebuje ciut grubszej kreski */
+#openSettings svg { stroke-width: 1.75; }
 
 .icon-btn:hover { color: var(--ink); border-color: var(--line-strong); }
 .icon-btn.ghost { background: transparent; border-color: transparent; width: 36px; height: 36px; }
