@@ -410,6 +410,20 @@ app.post('/api/unsubscribe', (req, res) => {
 /* --------------------------------------------------------------- static */
 
 const PUBLIC_DIR = path.resolve('public');
+const BUILD_ID = process.env.BUILD_ID || String(Date.now()).slice(-8);
+
+// Service worker dostaje unikalny numer builda, żeby każdy deploy unieważnił stary cache.
+app.get('/sw.js', (req, res) => {
+  try {
+    const src = fs.readFileSync(path.join(PUBLIC_DIR, 'sw.js'), 'utf8').replaceAll('__BUILD__', BUILD_ID);
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.send(src);
+  } catch (err) {
+    res.status(500).send('// sw unavailable');
+  }
+});
 
 app.use(
   express.static(PUBLIC_DIR, {

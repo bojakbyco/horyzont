@@ -1,6 +1,6 @@
 /* Horyzont — service worker: offline shell + obsługa web push */
 
-const VERSION = 'horyzont-v1';
+const VERSION = 'horyzont-__BUILD__';
 const SHELL = [
   '/',
   '/index.html',

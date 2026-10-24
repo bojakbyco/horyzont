@@ -2,9 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 process.env.HORYZONT_NO_LISTEN = '1';
-process.env.DATA_DIR = '/tmp/horyzont-test-data';
+process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'horyzont-unit-'));
 
 const { dueSlot, dayEnabled, sanitizeSettings, localNow, hmToMin } = await import('../server.js');
 
@@ -60,7 +63,7 @@ test('serwer: subskrypcja, push w suchym biegu, brak duplikatów, pauza, dzień'
     env: {
       ...process.env,
       PORT: '8099',
-      DATA_DIR: '/tmp/horyzont-test-data-run',
+      DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'horyzont-run-')),
       HORYZONT_NO_LISTEN: '0',
       HORYZONT_DRY_PUSH: '1',
       TICK_MS: '400',
