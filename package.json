@@ -1,0 +1,19 @@
+{
+  "name": "horyzont",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Horyzont — reguła 20-20-20 jako PWA z web push",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "web-push": "^3.6.7"
+  }
+}
