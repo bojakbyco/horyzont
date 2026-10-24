@@ -350,8 +350,8 @@ body {
 }
 
 .stat-key {
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #8d929c;
   white-space: nowrap;
@@ -849,7 +849,7 @@ body {
   .stats { gap: 8px; }
   .stat { padding: 11px 10px; }
   .stat-val { font-size: 17px; }
-  .stat-key { font-size: 9.5px; letter-spacing: 0.06em; }
+  .stat-key { font-size: 9px; letter-spacing: 0.02em; }
   .actions { gap: 8px; }
   .btn { font-size: 13.5px; padding: 0 10px; height: 50px; }
   .focus-title { margin-bottom: 18px; }
