@@ -26,7 +26,8 @@ Dwa różne mechanizmy, różne ograniczenia systemu:
 | Sytuacja | Co gra | Kontrola |
 | --- | --- | --- |
 | Aplikacja otwarta | ton z Web Audio (`app.js` → `playCue`) | pełna: barwa, długość ~1,3 s, głośność |
-| Telefon zablokowany | powiadomienie push | kanał powiadomień Chrome, zarządzany przez Androida |
+| Telefon zablokowany (PWA) | powiadomienie push | kanał powiadomień Chrome, zarządzany przez Androida |
+| Telefon zablokowany (APK) | `res/raw/horyzont.wav` przez kanał „Przerwy 20-20-20” | pełna: własny plik, głośność i wibracja kanału |
 
 Przeglądarka nie pozwala ustawić własnego pliku dźwiękowego dla powiadomienia
 push — opcja `sound` w Notification API jest na Androidzie ignorowana. Można
@@ -99,3 +100,32 @@ Stan subskrypcji żyje na wolumenie `/data`, więc przetrwa przebudowę kontener
 - Subskrypcje wygasłe (404/410) są usuwane automatycznie przy wysyłce.
 - Aplikacja nie zbiera żadnych danych poza endpointem push i harmonogramem;
   brak kont, brak analityki.
+
+## Aplikacja Android (APK)
+
+Osobny target z tego samego frontendu: Capacitor 8 opakowuje `public/` w WebView,
+a harmonogram jest planowany lokalnie przez `@capacitor/local-notifications`
+(dokładne alarmy, bez serwera i bez web push).
+
+```bash
+npm run android:sync          # bundle src/native.js + cap sync
+cd android && ./gradlew assembleRelease
+```
+
+Dźwięk powiadomienia: `android/app/src/main/res/raw/horyzont.wav`, przypięty do
+kanału `horyzont-v2`. Android 8+ nie pozwala zmienić dźwięku istniejącego kanału —
+nowy plik wymaga nowego `id` kanału w `src/native.js`.
+
+Buildy robi GitHub Actions (na serwerze nie ma JDK/Android SDK):
+
+- `.github/workflows/android.yml` — debug APK przy pushu na `main`,
+- `.github/workflows/android-release.yml` — podpisany APK na tag `v*`,
+  publikowany jako Release: `releases/latest/download/horyzont.apk`.
+
+Wymagane sekrety repo: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Keystore trzymaj poza repo —
+jego utrata oznacza brak możliwości aktualizacji zainstalowanej aplikacji.
+
+Na Samsungu (One UI) po instalacji: Ustawienia → Aplikacje → Horyzont →
+Bateria → **Bez ograniczeń**, oraz włącz „Alarmy i przypomnienia” w
+Ustawienia → Aplikacje → Horyzont → Uprawnienia specjalne.
