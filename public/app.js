@@ -1,6 +1,9 @@
 /* Horyzont — logika klienta
    Harmonogram liczymy lokalnie (natychmiast, offline), a serwer robi to samo
-   niezależnie i wysyła web push, gdy aplikacja jest zamknięta. */
+   niezależnie i wysyła web push, gdy aplikacja jest zamknięta. Wersja Android
+   (Capacitor) nie ma serwera: planuje dokładne alarmy przez LocalNotifications. */
+
+import { isNative, initNative, scheduleNative, cancelNative, onNativeTap, exactAlarmGranted } from './native.js';
 
 const DEFAULTS = {
   start: '10:30',
@@ -68,6 +71,7 @@ let settings = loadSettings();
 let todayOverride = null;   // null = wg dni tygodnia, true/false = ręcznie na dziś
 let pausedUntil = null;     // ms
 let pushReady = false;
+let nativeReady = false;
 let vapidKey = null;
 let deferredInstall = null;
 let lastFiredKey = null;
@@ -155,6 +159,40 @@ function nextSlot(from = new Date()) {
     }
   }
   return null;
+}
+
+/* ------------------------------------------------- harmonogram natywny */
+
+function nativeSlots(days = 7) {
+  const now = Date.now();
+  const from = pausedUntil && pausedUntil > now ? new Date(pausedUntil) : new Date(now + 5000);
+  const out = [];
+
+  for (let offset = 0; offset <= days; offset++) {
+    const day = new Date(from.getFullYear(), from.getMonth(), from.getDate() + offset);
+    if (!dayEnabled(day)) continue;
+    for (const min of slotsForDay(day)) {
+      const at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.floor(min / 60), min % 60, 0, 0);
+      if (at <= from) continue;
+      if (`${dayKey(at)}#${min}` === lastFiredKey) continue; // „pomiń następną"
+      out.push(at);
+    }
+  }
+  return out.slice(0, 180);
+}
+
+let nativeArmTimer = null;
+function armNative(delay = 120) {
+  if (!nativeReady) return;
+  clearTimeout(nativeArmTimer);
+  nativeArmTimer = setTimeout(async () => {
+    try {
+      await cancelNative();
+      await scheduleNative(nativeSlots());
+    } catch (error) {
+      console.warn('Horyzont: nie udało się zaplanować alarmów', error);
+    }
+  }, delay);
 }
 
 function currentSlotIndex(now = new Date()) {
@@ -406,13 +444,13 @@ async function api(path, body) {
 }
 
 async function currentSubscription() {
-  if (!('serviceWorker' in navigator)) return null;
+  if (isNative() || !('serviceWorker' in navigator)) return null;
   const reg = await navigator.serviceWorker.ready;
   return reg.pushManager.getSubscription();
 }
 
 async function ensureSubscription({ interaction = false } = {}) {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+  if (isNative() || !('serviceWorker' in navigator) || !('PushManager' in window)) return null;
   if (Notification.permission === 'default' && interaction) {
     await Notification.requestPermission();
   }
@@ -445,6 +483,7 @@ function serverSettings() {
 
 let syncTimer = null;
 function syncSettings() {
+  if (isNative()) return;
   clearTimeout(syncTimer);
   syncTimer = setTimeout(async () => {
     const sub = await currentSubscription().catch(() => null);
@@ -456,6 +495,7 @@ function syncSettings() {
 }
 
 function updatePushStatus() {
+  if (isNative() || !el.pushStatus) return;
   if (!('Notification' in window)) {
     el.pushStatus.textContent = 'niedostępne';
     el.enablePush.disabled = true;
@@ -568,6 +608,7 @@ function commitSettings() {
   syncChips();
   render();
   syncSettings();
+  armNative();
 }
 
 el.pauseBtn.addEventListener('click', () => {
@@ -587,6 +628,7 @@ el.pauseSheet.querySelectorAll('[data-pause]').forEach((btn) => {
     pausedUntil = Date.now() + minutes * 60000;
     el.pauseSheet.close();
     render();
+    armNative();
     toast(`Wstrzymane na ${value === 'eod' ? 'resztę dnia' : `${minutes} min`}`);
     const sub = await currentSubscription().catch(() => null);
     if (sub) {
@@ -606,6 +648,7 @@ async function resume() {
   pausedUntil = null;
   el.pauseSheet.close?.();
   render();
+  armNative();
   const sub = await currentSubscription().catch(() => null);
   if (sub) {
     try { await api('/api/pause', { endpoint: sub.endpoint, resume: true }); } catch { /* offline */ }
@@ -617,6 +660,7 @@ el.skipBtn.addEventListener('click', async () => {
   if (!next) return;
   // lokalnie oznaczamy slot jako obsłużony, żeby nie odpalił w aplikacji
   lastFiredKey = `${dayKey(next.at)}#${next.min}`;
+  armNative(0);
   toast(`Pominięto przerwę o ${fmtHM(next.min)}`);
   const sub = await currentSubscription().catch(() => null);
   if (sub) {
@@ -628,6 +672,7 @@ el.todayToggle.addEventListener('click', async () => {
   todayOverride = todayOverride === false ? null : true;
   if (!todayOverride && !settings.days.includes(isoWeekday(new Date()))) todayOverride = true;
   render();
+  armNative();
   toast(todayOverride ? 'Włączone na dziś' : 'Przywrócono harmonogram');
   const sub = await currentSubscription().catch(() => null);
   if (sub) {
@@ -755,31 +800,59 @@ async function boot() {
   syncChips();
   render();
 
-  if ('serviceWorker' in navigator) {
-    try { await navigator.serviceWorker.register('/sw.js', { scope: '/' }); } catch { /* dev bez SW */ }
-  }
+  if (isNative()) {
+    document.body.classList.add('native');
 
-  try {
-    const cfg = await api('/api/config');
-    vapidKey = cfg.publicKey;
-  } catch { /* offline */ }
+    const result = await initNative();
+    nativeReady = result.ok;
 
-  updatePushStatus();
-  if (Notification?.permission === 'granted') {
-    ensureSubscription().catch(() => {});
+    // W APK nie ma web pusha ani instalacji PWA — chowamy te sekcje.
+    el.enablePush?.closest('.block-card')?.remove();
+    el.installCard?.remove();
+    el.installBanner?.remove();
+
+    if (nativeReady) {
+      onNativeTap(() => startFocus());
+      armNative(0);
+    } else {
+      toast(result.reason === 'permission'
+        ? 'Włącz powiadomienia dla Horyzontu w ustawieniach Androida'
+        : 'Powiadomienia systemowe niedostępne');
+    }
+
+    // Po powrocie z ustawień (alarmy dokładne / bateria) dozbrajamy plan.
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState !== 'visible' || !nativeReady) return;
+      if (!(await exactAlarmGranted())) return;
+      armNative(600);
+    });
+  } else {
+    if ('serviceWorker' in navigator) {
+      try { await navigator.serviceWorker.register('/sw.js', { scope: '/' }); } catch { /* dev bez SW */ }
+    }
+
+    try {
+      const cfg = await api('/api/config');
+      vapidKey = cfg.publicKey;
+    } catch { /* offline */ }
+
+    updatePushStatus();
+    if (Notification?.permission === 'granted') {
+      ensureSubscription().catch(() => {});
+    }
+
+    // powiadomienia systemowe obsługiwane tutaj, gdy aplikacja jest na wierzchu
+    navigator.serviceWorker?.addEventListener?.('message', (event) => {
+      if (event.data?.type === 'horyzont:gaze') {
+        if (document.visibilityState === 'visible') startFocus();
+      }
+    });
   }
 
   if (new URLSearchParams(location.search).get('focus') === '1') {
     history.replaceState(null, '', '/');
     setTimeout(startFocus, 350);
   }
-
-  // powiadomienia systemowe obsługiwane tutaj, gdy aplikacja jest na wierzchu
-  navigator.serviceWorker?.addEventListener?.('message', (event) => {
-    if (event.data?.type === 'horyzont:gaze') {
-      if (document.visibilityState === 'visible') startFocus();
-    }
-  });
 }
 
 boot();

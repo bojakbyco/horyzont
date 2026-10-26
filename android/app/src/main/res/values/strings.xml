@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Horyzont</string>
+    <string name="title_activity_main">Horyzont</string>
+    <string name="package_name">com.jakbyco.horyzont</string>
+    <string name="custom_url_scheme">com.jakbyco.horyzont</string>
+</resources>
