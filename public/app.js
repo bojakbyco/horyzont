@@ -3,7 +3,7 @@
    niezależnie i wysyła web push, gdy aplikacja jest zamknięta. Wersja Android
    (Capacitor) nie ma serwera: planuje dokładne alarmy przez LocalNotifications. */
 
-import { isNative, initNative, scheduleNative, cancelNative, onNativeTap, exactAlarmGranted } from './native.js';
+import { isNative, initNative, scheduleNative, cancelNative, onNativeTap, exactAlarmGranted, requestExactAlarmSetting } from './native.js';
 
 const DEFAULTS = {
   start: '10:30',
@@ -814,6 +814,16 @@ async function boot() {
     if (nativeReady) {
       onNativeTap(() => startFocus());
       armNative(0);
+
+      if (!(await exactAlarmGranted())) {
+        const asked = localStorage.getItem('horyzont.exactAsked') === '1';
+        if (!asked) {
+          localStorage.setItem('horyzont.exactAsked', '1');
+          await requestExactAlarmSetting();
+        } else {
+          toast('Włącz „Alarmy i przypomnienia” dla Horyzontu w ustawieniach');
+        }
+      }
     } else {
       toast(result.reason === 'permission'
         ? 'Włącz powiadomienia dla Horyzontu w ustawieniach Androida'

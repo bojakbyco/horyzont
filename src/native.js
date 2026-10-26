@@ -33,18 +33,19 @@ export async function initNative() {
     }
     if (display !== 'granted') return { ok: false, reason: 'permission' };
 
-    if (Capacitor.getPlatform() === 'android') {
-      const exact = await LocalNotifications.checkExactNotificationSetting();
-      if (exact.exact_alarm !== 'granted') {
-        // Otwiera systemowy ekran „Alarmy i przypomnienia"; po powrocie
-        // aplikacja sprawdzi ustawienie ponownie i dozbroi harmonogram.
-        await LocalNotifications.changeExactNotificationSetting();
-      }
-    }
-
     return { ok: true };
   } catch (error) {
     return { ok: false, reason: String(error?.message || error) };
+  }
+}
+
+/** Otwiera systemowy ekran „Alarmy i przypomnienia” (jednorazowo, z UI). */
+export async function requestExactAlarmSetting() {
+  if (!isNative() || Capacitor.getPlatform() !== 'android') return;
+  try {
+    await LocalNotifications.changeExactNotificationSetting();
+  } catch {
+    /* starsze Androidy nie mają tego ekranu */
   }
 }
 
