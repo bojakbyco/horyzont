@@ -188,7 +188,7 @@ function armNative(delay = 120) {
   nativeArmTimer = setTimeout(async () => {
     try {
       await cancelNative();
-      await scheduleNative(nativeSlots());
+      await scheduleNative(nativeSlots(), { breakSec: Math.max(5, Number(settings.breakSec) || 20) });
     } catch (error) {
       console.warn('Horyzont: nie udało się zaplanować alarmów', error);
     }
@@ -411,7 +411,9 @@ function startFocus() {
     }, 400);
     bumpDone();
     render();
-    if (withChime) playCue(settings.volume, 'end');
+    // W APK dźwięk końca gra osobne powiadomienie natywne (WebAudio bywa
+    // blokowane, gdy ekran jest zablokowany albo aplikacja w tle).
+    if (withChime && !nativeReady) playCue(settings.volume, 'end');
     if (navigator.vibrate) navigator.vibrate(18);
   };
 

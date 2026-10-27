@@ -8,6 +8,8 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 
 const CHANNEL_ID = 'horyzont-v2';
 const SOUND = 'horyzont'; // android/app/src/main/res/raw/horyzont.wav
+const END_CHANNEL_ID = 'horyzont-end-v1';
+const END_SOUND = 'horyzont_end'; // android/app/src/main/res/raw/horyzont_end.wav
 
 export const isNative = () => Capacitor.isNativePlatform();
 
@@ -23,6 +25,16 @@ export async function initNative() {
       sound: SOUND,
       importance: 4,
       vibration: true,
+      visibility: 1
+    });
+
+    await LocalNotifications.createChannel({
+      id: END_CHANNEL_ID,
+      name: 'Koniec przerwy',
+      description: 'Dźwięk po zakończeniu 20 sekund przerwy',
+      sound: END_SOUND,
+      importance: 3,
+      vibration: false,
       visibility: 1
     });
 
@@ -62,18 +74,35 @@ export async function exactAlarmGranted() {
 
 const idFor = (date) => Math.floor(date.getTime() / 60000) % 2000000000;
 
-/** Planuje dokładnie wskazane terminy (jeden alarm = jedno powiadomienie). */
-export async function scheduleNative(dates, { title, body } = {}) {
+/** Planuje dokładnie wskazane terminy: przypomnienie + dźwięk końca przerwy. */
+export async function scheduleNative(dates, { title, body, breakSec = 20 } = {}) {
   if (!isNative() || !Array.isArray(dates) || dates.length === 0) return 0;
 
-  const notifications = dates.map((at) => ({
-    id: idFor(at),
-    title: title || 'Horyzont',
-    body: body || 'Oderwij wzrok na 20 sekund',
-    channelId: CHANNEL_ID,
-    schedule: { at: new Date(at), allowWhileIdle: true },
-    extra: { at: new Date(at).toISOString() }
-  }));
+  const pause = Math.max(5, Number(breakSec) || 20);
+  const notifications = [];
+
+  for (const at of dates) {
+    const start = new Date(at);
+    const end = new Date(start.getTime() + pause * 1000);
+
+    notifications.push({
+      id: idFor(start),
+      title: title || 'Horyzont',
+      body: body || 'Oderwij wzrok na 20 sekund',
+      channelId: CHANNEL_ID,
+      schedule: { at: start, allowWhileIdle: true },
+      extra: { at: start.toISOString(), phase: 'start' }
+    });
+
+    notifications.push({
+      id: idFor(start) + 1,
+      title: 'Przerwa zakończona',
+      body: 'Możesz wrócić do ekranu',
+      channelId: END_CHANNEL_ID,
+      schedule: { at: end, allowWhileIdle: true },
+      extra: { at: start.toISOString(), phase: 'end' }
+    });
+  }
 
   await LocalNotifications.schedule({ notifications });
   return notifications.length;
