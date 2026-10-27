@@ -236,10 +236,22 @@ function audio() {
 }
 
 /** Bardzo krótki, miękki ton: trzy sinusoidalne składowe, wolny atak, długie wybrzmienie. */
-function playCue(level = settings.volume) {
+function playCue(level = settings.volume, kind = 'start') {
   const ctx = audio();
   if (!ctx || level <= 0) return;
   const t = ctx.currentTime;
+
+  const cue = kind === 'end'
+    ? { peak: 0.13, hold: 1.05, partials: [
+        { f: 659.25, g: 0.5, d: 0.9 },
+        { f: 987.77, g: 0.18, d: 0.7 }
+      ] }
+    : { peak: 0.16, hold: 1.35, partials: [
+        { f: 784.0, g: 0.55, d: 1.2 },
+        { f: 1174.66, g: 0.2, d: 0.9 },
+        { f: 1567.98, g: 0.07, d: 0.6 }
+      ] };
+
   const master = ctx.createGain();
   const filter = ctx.createBiquadFilter();
   filter.type = 'lowpass';
@@ -248,16 +260,10 @@ function playCue(level = settings.volume) {
   filter.connect(master);
   master.connect(ctx.destination);
   master.gain.setValueAtTime(0.0001, t);
-  master.gain.linearRampToValueAtTime(0.0001 + level * 0.16, t + 0.09);
-  master.gain.exponentialRampToValueAtTime(0.0001, t + 1.35);
+  master.gain.linearRampToValueAtTime(0.0001 + level * cue.peak, t + 0.09);
+  master.gain.exponentialRampToValueAtTime(0.0001, t + cue.hold);
 
-  const partials = [
-    { f: 784.0, g: 0.55, d: 1.2 },
-    { f: 1174.66, g: 0.2, d: 0.9 },
-    { f: 1567.98, g: 0.07, d: 0.6 }
-  ];
-
-  for (const p of partials) {
+  for (const p of cue.partials) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
@@ -267,7 +273,7 @@ function playCue(level = settings.volume) {
     gain.gain.exponentialRampToValueAtTime(0.0001, t + p.d);
     osc.connect(gain).connect(filter);
     osc.start(t);
-    osc.stop(t + Math.max(p.d, 1.35) + 0.05);
+    osc.stop(t + Math.max(p.d, cue.hold) + 0.05);
   }
 }
 
@@ -393,7 +399,7 @@ function startFocus() {
   requestWakeLock();
 
   let done = false;
-  const finish = () => {
+  const finish = (withChime = true) => {
     if (done) return;
     done = true;
     clearInterval(focusTimer);
@@ -405,6 +411,7 @@ function startFocus() {
     }, 400);
     bumpDone();
     render();
+    if (withChime) playCue(settings.volume, 'end');
     if (navigator.vibrate) navigator.vibrate(18);
   };
 
@@ -419,7 +426,7 @@ function startFocus() {
   paint();
   clearInterval(focusTimer);
   focusTimer = setInterval(paint, 100);
-  el.focusEnd.onclick = finish;
+  el.focusEnd.onclick = () => finish(false);
 }
 
 /* ------------------------------------------------------------------- push */
